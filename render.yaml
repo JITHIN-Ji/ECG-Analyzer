@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: ecg-analyzer
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run main.py --server.port=$PORT
+    plan: free
