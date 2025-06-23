@@ -27,7 +27,8 @@ if not os.path.exists(DB_PATH):
             heart_rate REAL, rhythm TEXT, rr_interval REAL, ibi REAL,
             qrs_duration REAL, p_wave_amp REAL, qrs_amp REAL, t_wave_amp REAL,
             qt_interval REAL, qtc_interval REAL, sdnn REAL, rmssd REAL,
-            st_segment TEXT, pr_segment TEXT
+            st_segment REAL, pr_segment REAL
+
         )''')
 
 
@@ -116,10 +117,10 @@ def extract_patient_info_from_pdf(pdf_file):
             for page in doc:
                 text += page.get_text()
     except:
-        return None, None, None
+        return "Unknown", "N/A", "N/A"
 
-    name_match = re.search(r'Patient Name:\s*(.*)', text)
-    age_gender_match = re.search(r'Age\s*/\s*Gender:\s*(\d+)Y/(\w+)', text)
+    name_match = re.search(r'Patient Name:\s*(.+)', text)
+    age_gender_match = re.search(r'Age\s*/\s*Gender:\s*(\d+)\s*Y\s*/?\s*(Male|Female)', text, re.IGNORECASE)
 
     name = name_match.group(1).strip() if name_match else "Unknown"
     age = age_gender_match.group(1) if age_gender_match else "N/A"
@@ -127,9 +128,37 @@ def extract_patient_info_from_pdf(pdf_file):
     return name, age, gender
 
 
+
+
+
+def extract_heart_rate_from_pdf(pdf_io):
+    pdf_io.seek(0)
+    text = ""
+    try:
+        with fitz.open(stream=pdf_io, filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
+    except:
+        return None
+
+    # Look for formats like: AR: 72bpm
+    match = re.search(r'AR\s*[:\-]?\s*(\d+)\s*bpm', text, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+
+
+
+
 if uploaded_file:
-    image = pdf_to_image(uploaded_file) if uploaded_file.type == "application/pdf" else Image.open(uploaded_file)
-    name, age, gender = extract_patient_info_from_pdf(uploaded_file) if uploaded_file.type == "application/pdf" else ("Unknown", "N/A", "N/A")
+    # Read the uploaded file into memory once
+    file_bytes = uploaded_file.read()
+
+    # Convert to image (if PDF)
+    image = pdf_to_image(io.BytesIO(file_bytes)) if uploaded_file.type == "application/pdf" else Image.open(uploaded_file)
+
+    # Extract name/age/gender
+    name, age, gender = extract_patient_info_from_pdf(io.BytesIO(file_bytes)) if uploaded_file.type == "application/pdf" else ("Unknown", "N/A", "N/A")
 
     st.subheader("👤 Patient Details")
     st.markdown(f"**Name:** {name}  \n**Age:** {age}  \n**Gender:** {gender}")
@@ -207,6 +236,15 @@ if uploaded_file:
     if len(r_peaks) > 1:
         rr = np.diff(r_peaks) / FS
         bpm = 60 / np.mean(rr)
+        # === Compare PDF Heart Rate with Extracted Heart Rate ===
+        pdf_stream = io.BytesIO(file_bytes)
+        pdf_hr = extract_heart_rate_from_pdf(pdf_stream)
+
+        # One single validation message
+        if pdf_hr is None or abs(pdf_hr - bpm) > 7:
+            st.error("❌ Unable To Read File! Please re-upload.")
+            st.stop()
+
         ibi = 1 / (bpm / 60)
         sdnn = np.std(rr)
         rmssd = np.sqrt(np.mean(np.square(np.diff(rr))))
@@ -218,10 +256,55 @@ if uploaded_file:
         mv_per_mm = 0.1  # ECG paper scale
         mv_per_pixel = mv_per_mm / pixels_per_mm
 
+        
+
         p_wave_amp = np.ptp(filtered_signal[:50]) * mv_per_pixel
         qrs_amp = np.ptp(filtered_signal) * mv_per_pixel
 # Assumed ECG paper scale: 10 mm/mV, and ~1 pixel per mm
+    # --- Estimate PR Segment ---
+        estimated_p_duration = 0.08  # 80 ms
+        pr_segments = []
+
+        for r in r_peaks:
+            p_end = r - int(0.12 * FS)  # assume P-wave ends ~120ms before R
+            qrs_start = r - np.argmax(np.diff(filtered_signal[max(r-30, 0):r]) < -0.5)
+            if qrs_start > p_end:
+                pr_segments.append((qrs_start - p_end) / FS)
+
+        pr_segment = np.mean(pr_segments) if pr_segments else 0.06  # fallback
+
+        # --- Estimate ST Segment ---
+        st_segments = []
+
+        for r in r_peaks:
+            qrs_end = r + np.argmax(np.diff(filtered_signal[r:min(r+30, len(filtered_signal))]) > 0.5)
+            t_region = filtered_signal[qrs_end + 5: qrs_end + int(0.4 * FS)]
+            t_thresh = 0.2 * np.max(t_region) if len(t_region) else 0
+            t_above = np.where(t_region > t_thresh)[0]
+            if len(t_above) > 0:
+                t_start = qrs_end + 5 + t_above[0]
+                st_segments.append((t_start - qrs_end) / FS)
+
+        st_segment = np.mean(st_segments) if st_segments else 0.08
+        # === Classify ST Segment ===
+        # === Classify ST Segment ===
+        # --- Estimate PR Interval ---
+        # pr_intervals = []
+
+        # for r in r_peaks:
+        #     p_start = r - int(0.16 * FS)  # assume P wave starts ~160ms before R
+        #     qrs_start = r - int(0.10 * FS)  # assume QRS starts ~100ms before R
+        #     if 0 < p_start < qrs_start:
+        #         pr_intervals.append((qrs_start - p_start) / FS)
+
+        # pr_interval = np.mean(pr_intervals) if pr_intervals else 0.14
+
+
         
+
+
+
+                
 
         # Estimate T-wave duration in the last portion of the signal
         t_wave_region = filtered_signal[-int(FS):]  # Last 1 second window
@@ -248,6 +331,10 @@ if uploaded_file:
             "Tachycardia (Fast)"
         )
 
+        # === Compare PDF Heart Rate with Extracted Heart Rate ===
+        
+
+
         df_results = pd.DataFrame({
         "Parameter": [
             "Heart Rate (bpm)", "Rhythm", "RR Interval (s)", "IBI (s)",
@@ -259,7 +346,8 @@ if uploaded_file:
             f"{bpm:.2f}", rhythm_class, f"{np.mean(rr):.3f}", f"{ibi:.3f}",
             f"{qrs_duration:.3f}", f"{p_wave_amp:.2f}", f"{qrs_amp:.2f}",
             f"{t_wave_duration:.3f}", f"{qt_interval:.3f}", f"{qtc:.3f}",
-            f"{sdnn:.4f}", f"{rmssd:.4f}", "~0.12", "~0.06"
+            f"{sdnn:.4f}", f"{rmssd:.4f}", f"{st_segment:.3f}", f"{pr_segment:.3f}"
+
         ]
     })
 
@@ -289,11 +377,12 @@ if uploaded_file:
                     qrs_duration, p_wave_amp, qrs_amp, t_wave_amp,
                     qt_interval, qtc_interval, sdnn, rmssd,
                     st_segment, pr_segment
+
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 name, age, gender, bpm, rhythm_class, np.mean(rr), ibi,
                 qrs_duration, p_wave_amp, qrs_amp, t_wave_duration,
-                qt_interval, qtc, sdnn, rmssd, "~0.12", "~0.06"
+                qt_interval, qtc, sdnn, rmssd, st_segment, pr_segment
             ))
 
         st.success("✅ ECG analysis has been saved  successfully!")
