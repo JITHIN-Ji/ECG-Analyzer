@@ -131,19 +131,49 @@ def extract_patient_info_from_pdf(pdf_file):
 
 
 
-def extract_heart_rate_from_pdf(pdf_io):
-    pdf_io.seek(0)
-    text = ""
-    try:
-        with fitz.open(stream=pdf_io, filetype="pdf") as doc:
-            for page in doc:
-                text += page.get_text()
-    except:
-        return None
+# def extract_heart_rate_from_pdf(pdf_io):
+#     pdf_io.seek(0)
+#     text = ""
+#     try:
+#         with fitz.open(stream=pdf_io, filetype="pdf") as doc:
+#             for page in doc:
+#                 text += page.get_text()
+#     except:
+#         return None
 
-    # Look for formats like: AR: 72bpm
-    match = re.search(r'AR\s*[:\-]?\s*(\d+)\s*bpm', text, re.IGNORECASE)
-    return int(match.group(1)) if match else None
+#     # Look for formats like: AR: 72bpm
+#     match = re.search(r'AR\s*[:\-]?\s*(\d+)\s*bpm', text, re.IGNORECASE)
+#     return int(match.group(1)) if match else None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -236,14 +266,14 @@ if uploaded_file:
     if len(r_peaks) > 1:
         rr = np.diff(r_peaks) / FS
         bpm = 60 / np.mean(rr)
-        # === Compare PDF Heart Rate with Extracted Heart Rate ===
-        pdf_stream = io.BytesIO(file_bytes)
-        pdf_hr = extract_heart_rate_from_pdf(pdf_stream)
+        
+        # pdf_stream = io.BytesIO(file_bytes)
+        # pdf_hr = extract_heart_rate_from_pdf(pdf_stream)
 
-        # One single validation message
-        if pdf_hr is None or abs(pdf_hr - bpm) > 7:
-            st.error("❌ Unable To Read File! Please re-upload.")
-            st.stop()
+        
+        # if pdf_hr is None or abs(pdf_hr - bpm) > 15:
+        #     st.error("❌ Unable To Read File! Please re-upload.")
+        #     st.stop()
 
         ibi = 1 / (bpm / 60)
         sdnn = np.std(rr)
