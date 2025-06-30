@@ -8,8 +8,6 @@ from scipy.signal import butter, filtfilt, find_peaks
 import math
 import fitz  # PyMuPDF
 import io
-import base64
-import json
 import re
 import google.generativeai as genai
 from fpdf import FPDF
@@ -17,6 +15,7 @@ import tempfile
 import sqlite3
 import os
 from datetime import datetime
+from helper import analyze_ecg_classification
 
 DB_PATH = "ecg_results.db"
 if not os.path.exists(DB_PATH):
@@ -31,19 +30,8 @@ if not os.path.exists(DB_PATH):
 
         )''')
 
-
-
 st.set_page_config(page_title="ECG Digitizer & Analyzer", layout="wide")
 st.title("🫀 ECG Digitizer & Analyzer")
-
-# === Google Gemini API ===
-api_key = "YOUR_API_KEY_HERE"  # Replace with your Gemini API key
-if api_key:
-    genai.configure(api_key=api_key)
-
-
-
-
 
 # === Convert PDF to image ===
 def pdf_to_image(pdf_file):
@@ -60,27 +48,6 @@ def pdf_to_image(pdf_file):
     except Exception as e:
         st.error(f"PDF conversion error: {str(e)}")
         return None
-
-# === Get Lead II using Gemini ===
-def get_lead_ii_coordinates(image, api_key):
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        buffered = io.BytesIO()
-        image.save(buffered, format="PNG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode()
-        prompt = """
-        Provide JSON bounding box for Lead II ECG as:
-        {"x1": <int>, "y1": <int>, "x2": <int>, "y2": <int>}
-        """
-        image_part = {"mime_type": "image/png", "data": img_base64}
-        response = model.generate_content([prompt, image_part])
-        match = re.search(r'\{[^}]*\}', response.text)
-        if match:
-            coords = json.loads(match.group())
-            return coords.get('x1'), coords.get('y1'), coords.get('x2'), coords.get('y2')
-    except:
-        pass
-    return None
 
 # === Estimate mm per pixel ===
 # ... [existing imports remain unchanged]
@@ -127,59 +94,6 @@ def extract_patient_info_from_pdf(pdf_file):
     gender = age_gender_match.group(2) if age_gender_match else "N/A"
     return name, age, gender
 
-
-
-
-
-# def extract_heart_rate_from_pdf(pdf_io):
-#     pdf_io.seek(0)
-#     text = ""
-#     try:
-#         with fitz.open(stream=pdf_io, filetype="pdf") as doc:
-#             for page in doc:
-#                 text += page.get_text()
-#     except:
-#         return None
-
-#     # Look for formats like: AR: 72bpm
-#     match = re.search(r'AR\s*[:\-]?\s*(\d+)\s*bpm', text, re.IGNORECASE)
-#     return int(match.group(1)) if match else None
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 if uploaded_file:
     # Read the uploaded file into memory once
     file_bytes = uploaded_file.read()
@@ -192,6 +106,27 @@ if uploaded_file:
 
     st.subheader("👤 Patient Details")
     st.markdown(f"**Name:** {name}  \n**Age:** {age}  \n**Gender:** {gender}")
+
+    # Get ECG Classification from Gemini API
+    st.subheader("🔍 ECG Classification")
+    with st.spinner("Analyzing ECG with AI..."):
+        file_type = "pdf" if uploaded_file.type == "application/pdf" else "png"
+        classification = analyze_ecg_classification(file_bytes, file_type)
+        
+        if classification:
+            # Display classification with appropriate styling
+            if classification == "Normal":
+                st.success(f"✅ **Classification:** {classification}")
+            elif classification == "MI":
+                st.error(f"🚨 **Classification:** {classification}")
+            elif classification == "History of MI":
+                st.warning(f"⚠️ **Classification:** {classification}")
+            elif classification == "Abnormal heartbeat":
+                st.warning(f"💓 **Classification:** {classification}")
+            else:
+                st.info(f"📊 **Classification:** {classification}")
+        else:
+            st.error("❌ Unable to classify ECG. Please try again.")
 
     # Check if user already exists
     with sqlite3.connect(DB_PATH) as conn:
@@ -214,12 +149,10 @@ if uploaded_file:
 
     img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
     img_gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-    st.image(image, caption="Original ECG", use_column_width=True)
+    st.image(image, caption="Original ECG", use_container_width=True)
 
-    crop_coords = get_lead_ii_coordinates(image, api_key) if api_key else None
-    if not crop_coords:
-        st.warning("Using manual bounding box for Lead II")
-        crop_coords = (110, 658, 1422, 847)
+
+    crop_coords = (110, 658, 1422, 847)
 
     x1, y1, x2, y2 = crop_coords
     crop_img = img_gray[y1:y2, x1:x2]
