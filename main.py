@@ -31,7 +31,7 @@ if not os.path.exists(DB_PATH):
         )''')
 
 st.set_page_config(page_title="ECG Digitizer & Analyzer", layout="wide")
-st.title("🫀 ECG Digitizer & Analyzer")
+st.title("🫀 BHARAT CARDIO")
 
 # === Convert PDF to image ===
 def pdf_to_image(pdf_file):
@@ -299,20 +299,20 @@ if uploaded_file:
 
 
         df_results = pd.DataFrame({
-        "Parameter": [
-            "Heart Rate (bpm)", "Rhythm", "RR Interval (s)", "IBI (s)",
-            "QRS Duration (s)", "P-Wave Amplitude", "QRS Amplitude",
-            "T-Wave Duration (s)", "QT Interval (s)", "QTc Interval (s)",
-            "SDNN (s)", "RMSSD (s)", "ST Segment (s)", "PR Segment (s)"
-        ],
-        "Value": [
-            f"{bpm:.2f}", rhythm_class, f"{np.mean(rr):.3f}", f"{ibi:.3f}",
-            f"{qrs_duration:.3f}", f"{p_wave_amp:.2f}", f"{qrs_amp:.2f}",
-            f"{t_wave_duration:.3f}", f"{qt_interval:.3f}", f"{qtc:.3f}",
-            f"{sdnn:.4f}", f"{rmssd:.4f}", f"{st_segment:.3f}", f"{pr_segment:.3f}"
+            "Parameter": [
+                "Heart Rate (bpm)", "Rhythm", "RR Interval (s)", "IBI (s)",
+                "QRS Duration (s)", "P-Wave Amplitude (mV)", "QRS Amplitude (mV)",
+                "T-Wave Duration (s)", "QT Interval (s)", "QTc Interval (s)",
+                "SDNN (s)", "RMSSD (s)", "ST Segment (s)", "PR Segment (s)"
+            ],
+            "Value": [
+                f"{bpm:.2f}", rhythm_class, f"{np.mean(rr):.3f}", f"{ibi:.3f}",
+                f"{qrs_duration:.3f}", f"{p_wave_amp:.2f} mV", f"{qrs_amp:.2f} mV",
+                f"{t_wave_duration:.3f}", f"{qt_interval:.3f}", f"{qtc:.3f}",
+                f"{sdnn:.4f}", f"{rmssd:.4f}", f"{st_segment:.3f}", f"{pr_segment:.3f}"
+            ]
+        })
 
-        ]
-    })
 
 # 👇 Show styled table
         st.subheader("📋 ECG Parameters for This Upload")
