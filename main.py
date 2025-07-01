@@ -26,7 +26,7 @@ if not os.path.exists(DB_PATH):
             heart_rate REAL, rhythm TEXT, rr_interval REAL, ibi REAL,
             qrs_duration REAL, p_wave_amp REAL, qrs_amp REAL, t_wave_amp REAL,
             qt_interval REAL, qtc_interval REAL, sdnn REAL, rmssd REAL,
-            st_segment REAL, pr_segment REAL, 
+            st_segment REAL, pr_segment REAL
 
         )''')
 
