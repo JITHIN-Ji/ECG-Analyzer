@@ -40,7 +40,7 @@ def analyze_ecg_classification(uploaded_file_bytes, file_type="pdf"):
         
         # API Call
         model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash-exp",
+            model_name="gemini-2.5-pro",
             generation_config={"temperature": 0}
         )
         
