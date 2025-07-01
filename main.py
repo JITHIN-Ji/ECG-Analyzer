@@ -26,9 +26,20 @@ if not os.path.exists(DB_PATH):
             heart_rate REAL, rhythm TEXT, rr_interval REAL, ibi REAL,
             qrs_duration REAL, p_wave_amp REAL, qrs_amp REAL, t_wave_amp REAL,
             qt_interval REAL, qtc_interval REAL, sdnn REAL, rmssd REAL,
-            st_segment REAL, pr_segment REAL
+            st_segment REAL, pr_segment REAL, 
 
         )''')
+
+
+
+with sqlite3.connect(DB_PATH) as conn:
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(ecg_reports);")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "classification" not in columns:
+        cursor.execute("ALTER TABLE ecg_reports ADD COLUMN classification TEXT;")
+        conn.commit()
+
 
 st.set_page_config(page_title="ECG Digitizer & Analyzer", layout="wide")
 st.title("🫀 BHARAT CARDIO")
@@ -109,7 +120,7 @@ if uploaded_file:
 
     # Get ECG Classification from Gemini API
     st.subheader("🔍 ECG Classification")
-    with st.spinner("Analyzing ECG with AI..."):
+    with st.spinner("Analyzing ECG ..."):
         file_type = "pdf" if uploaded_file.type == "application/pdf" else "png"
         classification = analyze_ecg_classification(file_bytes, file_type)
         
@@ -141,7 +152,7 @@ if uploaded_file:
         prev_df = pd.DataFrame(previous_entries, columns=[
             "ID", "Name", "Age", "Gender", "Heart Rate", "Rhythm", "RR Interval", "IBI",
             "QRS Duration", "P-Wave Amplitude", "QRS Amplitude", "T-Wave Duration",
-            "QT Interval", "QTc Interval", "SDNN", "RMSSD", "ST Segment", "PR Segment"
+            "QT Interval", "QTc Interval", "SDNN", "RMSSD", "ST Segment", "PR Segment", "Classification"
         ])
         st.subheader("📋 Stored ECG Report")
         st.dataframe(prev_df)
@@ -300,12 +311,14 @@ if uploaded_file:
 
         df_results = pd.DataFrame({
             "Parameter": [
+                "ECG Classification",
                 "Heart Rate (bpm)", "Rhythm", "RR Interval (s)", "IBI (s)",
                 "QRS Duration (s)", "P-Wave Amplitude (mV)", "QRS Amplitude (mV)",
                 "T-Wave Duration (s)", "QT Interval (s)", "QTc Interval (s)",
                 "SDNN (s)", "RMSSD (s)", "ST Segment (s)", "PR Segment (s)"
             ],
             "Value": [
+                classification, 
                 f"{bpm:.2f}", rhythm_class, f"{np.mean(rr):.3f}", f"{ibi:.3f}",
                 f"{qrs_duration:.3f}", f"{p_wave_amp:.2f} mV", f"{qrs_amp:.2f} mV",
                 f"{t_wave_duration:.3f}", f"{qt_interval:.3f}", f"{qtc:.3f}",
@@ -339,13 +352,13 @@ if uploaded_file:
                     name, age, gender, heart_rate, rhythm, rr_interval, ibi,
                     qrs_duration, p_wave_amp, qrs_amp, t_wave_amp,
                     qt_interval, qtc_interval, sdnn, rmssd,
-                    st_segment, pr_segment
+                    st_segment, pr_segment, classification
 
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 name, age, gender, bpm, rhythm_class, np.mean(rr), ibi,
                 qrs_duration, p_wave_amp, qrs_amp, t_wave_duration,
-                qt_interval, qtc, sdnn, rmssd, st_segment, pr_segment
+                qt_interval, qtc, sdnn, rmssd, st_segment, pr_segment, classification
             ))
 
         st.success("✅ ECG analysis has been saved  successfully!")
