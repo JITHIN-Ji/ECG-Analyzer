@@ -9,6 +9,8 @@ import math
 import fitz  # PyMuPDF
 import io
 import re
+import time
+
 import google.generativeai as genai
 from fpdf import FPDF
 import tempfile
@@ -121,8 +123,10 @@ if uploaded_file:
     # Get ECG Classification from Gemini API
     st.subheader("🔍 ECG Classification")
     with st.spinner("Analyzing ECG ..."):
+        start_class_time = time.time()
         file_type = "pdf" if uploaded_file.type == "application/pdf" else "png"
         classification = analyze_ecg_classification(file_bytes, file_type)
+        classification_duration = time.time() - start_class_time
         
         if classification:
             # Display classification with appropriate styling
@@ -177,6 +181,7 @@ if uploaded_file:
     FS = 1000 / ms_per_sample
 
     # ==== Everything else below remains unchanged ====
+    
 
     # Preprocessing
     ret, bin_img = cv2.threshold(crop_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -325,7 +330,12 @@ if uploaded_file:
                 f"{sdnn:.4f}", f"{rmssd:.4f}", f"{st_segment:.3f}", f"{pr_segment:.3f}"
             ]
         })
+        
 
+        st.success("✅ ECG analysis has been saved  successfully!")
+        st.info(f"""
+        **ECG Processing Time:** `{classification_duration:.2f} seconds`
+        """)
 
 # 👇 Show styled table
         st.subheader("📋 ECG Parameters for This Upload")
@@ -361,7 +371,7 @@ if uploaded_file:
                 qt_interval, qtc, sdnn, rmssd, st_segment, pr_segment, classification
             ))
 
-        st.success("✅ ECG analysis has been saved  successfully!")
+        
 
 
         pdf = FPDF()
@@ -387,12 +397,22 @@ if uploaded_file:
         pdf.cell(90, 10, "Value", border=1, ln=True, fill=True)
 
         # === Table Rows ===
+                # === Table Rows ===
         pdf.set_font("Arial", '', 12)
         for i in range(len(df_results)):
             param = df_results.iloc[i, 0]
             value = df_results.iloc[i, 1]
             pdf.cell(90, 10, str(param), border=1)
             pdf.cell(90, 10, str(value), border=1, ln=True)
+
+        # === Add Processing Time ===
+        pdf.ln(5)
+        
+        pdf.set_font("Arial", '', 12)
+        pdf.cell(0, 10, f"ECG Processing Time: {classification_duration:.2f} seconds", ln=True)
+
+        # === Save & Download ===
+
 
         # === Save & Download ===
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
