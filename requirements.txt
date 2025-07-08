@@ -6,5 +6,6 @@ matplotlib
 Pillow
 scipy
 PyMuPDF
-fpdf
 google-generativeai
+fpdf
+protobuf>=3.20,<4.0
